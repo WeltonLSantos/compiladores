@@ -1,0 +1,10 @@
+void main() {
+   float f;
+   char c;
+
+   while (c == 'K' or f > 10.0) {
+      prnt(Hello);
+   }
+
+}
+
