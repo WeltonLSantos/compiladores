@@ -1,0 +1,336 @@
+package compiler.syntax;
+
+import java_cup.runtime.*;
+import java.util.*;
+import compiler.tree.*;
+import compiler.tree.expressao.*;
+import compiler.tree.comando.*;
+import java_cup.runtime.Scanner.*;
+
+parser code {:
+
+  public void syntax_error(Symbol cur_token) {
+	  System.out.printf("WHOOPS! ERRO DE  SINTAXE NA LINHA %d, COLUNA %d (token tipo %d inesperado). \n",
+			  cur_token.left, cur_token.right, cur_token.sym);
+  }
+  public void unrecovered_syntax_error(Symbol cur_token) throws Exception {
+	  done_parsing();
+	  String msg = "WHOOPS! ERRO DE  SINTAXE NA LINHA" + cur_token.left + ", coluna " + cur_token.right 
+			  + " (token tipo " + cur_token.sym + " INESPERADO).";
+	  throw new Exception(msg);
+  }
+
+:}
+
+
+/*****  Terminais (tokens) *****/
+
+terminal String IDENTIFICADOR;
+    
+terminal Object    IGUAL_QUE;
+terminal Object    DIFERENTE_QUE;
+terminal Object    MAIOR_QUE;
+terminal Object    MENOR_QUE;
+terminal Object    MAIOR_OU_IGUAL;
+terminal Object    MENOR_OU_IGUAL;
+    
+terminal Object    SOMA;
+terminal Object    SUB;
+terminal Object    MULT;
+terminal Object    DIV;
+terminal Object    RESTO;
+terminal Object    AND;
+terminal Object    OR;
+terminal Object    NOT;
+    
+terminal Object    ATRIBUICAO;
+    
+terminal Object    ABRE_PAR;
+terminal Object    FECHA_PAR;
+terminal Object    ABRE_CHAVE;
+terminal Object    FECHA_CHAVE;
+terminal Object    VIRGULA;
+terminal Object    PONTO_VIRGULA;
+terminal Object    DOIS_PONTOS;
+    
+terminal String    INT_LITERAL;
+terminal String    FLOAT_LITERAL;
+terminal String    CHAR_LITERAL;
+terminal String    STRING_LITERAL;
+    
+terminal Object    KEY_IF;
+terminal Object    KEY_ELSE;
+terminal Object    KEY_WHILE;
+terminal Object    KEY_RETURN;
+terminal Object    KEY_INT;
+terminal Object    KEY_FLOAT;
+terminal Object    KEY_CHAR;
+terminal Object    KEY_STRING;
+terminal Object    KEY_CALL;
+terminal Object    KEY_DEF;
+terminal Object    KEY_PRINT;
+/***** ADICIONAIS QUE FALTAVAM SEGUNDO DOCUMENTO DA PRIMEIRA ENTREGA DO PROJETO *****/
+terminal Object    KEY_VOID;
+terminal Object    KEY_THEN;
+
+
+/***** Nao-terminais *****/
+
+non terminal 	Programa				programa;
+non terminal 	DeclGlobal				decl_global;
+non terminal 	DeclVariavel			decl_variavel;
+non terminal 	LinkedList<String>		lista_idents;
+non terminal 	LinkedList<String>		resto_lista_idents;
+non terminal 	Tipo					tipo;
+non terminal 	DeclFuncao				decl_funcao;
+non terminal 	Assinatura				assinatura;
+non terminal 	LinkedList<DeclVariavel> param_formais;
+non terminal 	LinkedList<DeclVariavel> resto_param_formais;
+non terminal 	Bloco					bloco;
+non terminal 	LinkedList<Comando>		lista_comandos;
+non terminal	Comando					comando;
+non terminal 	Atribuicao				atribuicao;
+non terminal 	Iteracao				iteracao;
+non terminal	Decisao					decisao;
+non terminal 	Escrita					escrita;
+non terminal 	ChamadaFuncCmd			chamada_func_cmd;
+non terminal 	Retorno					retorno;
+non terminal 	ChamadaFunc				chamada_func;
+non terminal	LinkedList<Expressao>	lista_exprs;
+non terminal 	LinkedList<Expressao>	resto_lista_exprs;
+non terminal 	Expressao 				expressao;
+non terminal	Expressao 				expr_basica;
+
+
+/***** Precedencia e associatividade *****/
+
+precedence left OR, AND; //simbolos de menor precedencia
+precedence left IGUAL_QUE, DIFERENTE_QUE, MAIOR_QUE, MENOR_QUE, MAIOR_OU_IGUAL, MENOR_OU_IGUAL;
+precedence left SOMA, SUB;     
+precedence left MULT, DIV, RESTO;   
+precedence left NOT;     //simbolo de maior precedencia
+
+/***** A gramatica *****/
+
+programa ::= programa:p decl_global:d  
+			{: p.addLast(d); RESULT = p ; :} 
+          
+          | /*vazio*/ 
+          {: RESULT = new Programa(); :}
+          ;
+
+decl_global ::= decl_variavel:dv
+				{: RESULT = dv; :}
+
+            | decl_funcao:df
+            {: RESULT = df; :}
+            ;
+            
+decl_variavel ::= lista_idents:lid DOIS_PONTOS tipo:tipo PONTO_VIRGULA
+				{: RESULT = new DeclVariavel(lid,tipo);  :}
+               ;
+               
+lista_idents ::= IDENTIFICADOR:id resto_lista_idents:r 
+				{: r.addLast(id); RESULT = r; :}
+             ;
+
+resto_lista_idents ::=  VIRGULA IDENTIFICADOR:id resto_lista_idents:r
+						{: r.addLast(id); RESULT = r; :}
+						
+                     |  /* vazio */
+                     {: RESULT = new LinkedList<String>(); :}
+                     ;
+
+tipo ::= KEY_INT
+		{: RESULT = Tipo.INT;  :}
+			 
+		| KEY_CHAR 
+		{: RESULT = Tipo.CHAR;  :}
+		
+		| KEY_FLOAT 
+		{: RESULT = Tipo.FLOAT;  :}
+		
+		| KEY_STRING 
+		{: RESULT = Tipo.STRING;  :}
+		;
+
+decl_funcao ::= assinatura:assinatura bloco:bloco 
+				{: RESULT = new DeclFuncao(assinatura,bloco);  :} 	
+				;
+
+assinatura ::= KEY_DEF IDENTIFICADOR:identificador ABRE_PAR param_formais:paramFormais FECHA_PAR DOIS_PONTOS tipo:tipo
+				{: RESULT = new Assinatura(identificador,paramFormais,tipo);  :} 
+				
+             | KEY_DEF IDENTIFICADOR:id ABRE_PAR param_formais:pfs FECHA_PAR
+             	{: RESULT = new Assinatura(id,pfs);  :}
+             ;
+             
+param_formais ::= IDENTIFICADOR:identificador DOIS_PONTOS tipo:tipo resto_param_formais:restoParamFormais
+				{: restoParamFormais.addLast(new DeclVariavel(identificador, tipo));  RESULT = restoParamFormais; :} 
+
+                | /*vazio*/
+                 {: RESULT = new LinkedList<DeclVariavel>(); :}
+                ;
+                  
+resto_param_formais ::= VIRGULA IDENTIFICADOR:id DOIS_PONTOS tipo:tipo resto_param_formais:rpfs
+						{: rpfs.addLast(new DeclVariavel(id,tipo)); RESULT = rpfs; :}
+                      | /*vazio*/
+                      	{: RESULT = new LinkedList<DeclVariavel>(); :}
+                      ; 
+
+bloco ::= ABRE_CHAVE lista_comandos:lcmds FECHA_CHAVE 
+			{: RESULT = new Bloco(lcmds);  :}
+			;
+
+lista_comandos ::= lista_comandos:comandos comando:comando
+				   {: comandos.addLast(comando); RESULT = comandos; :}
+				   |
+				   {: RESULT = new LinkedList<Comando>(); :} 
+                 ;
+
+comando  ::= decl_variavel:dv
+			 {: RESULT = dv; :}
+			 
+           | atribuicao:atri
+           	 {: RESULT = atri; :}
+           	 
+           | iteracao:iter
+             {: RESULT = iter; :}    
+               
+           | decisao:deci
+             {: RESULT = deci; :}
+             
+           | escrita:escr
+           	 {: RESULT = escr; :}
+           	 
+           | retorno:retor
+           	 {: RESULT = retor; :}
+           	 
+           | bloco:bloco
+             {: RESULT = bloco; :}
+             
+           | chamada_func_cmd:cfcmds
+           	 {: RESULT = cfcmds; :}
+           ;
+
+atribuicao ::= lista_idents:listaIdents ATRIBUICAO expressao:expressao PONTO_VIRGULA 
+				{: RESULT = new Atribuicao(listaIdents, expressao);  :}
+				;
+
+iteracao ::= KEY_WHILE ABRE_PAR expressao:expressao FECHA_PAR comando:comando
+			{: RESULT = new Iteracao(expressao, comando);  :}
+			;
+
+decisao ::= KEY_IF ABRE_PAR expressao:expr FECHA_PAR comando:cmdIf KEY_ELSE comando:cmdElse
+			{: RESULT = new Decisao(expr, cmdIf, cmdElse);  :}
+
+            | KEY_IF ABRE_PAR expressao:exp FECHA_PAR comando:cmd
+            {: RESULT = new Decisao(exp, cmd);  :}
+            
+            ;
+
+escrita ::= KEY_PRINT ABRE_PAR expressao:expressao FECHA_PAR PONTO_VIRGULA 
+			{: RESULT = new Escrita(expressao);  :}
+			;
+
+chamada_func_cmd ::= KEY_CALL chamada_func:chamadaFunc PONTO_VIRGULA 
+					{: RESULT = new ChamadaFuncCmd(chamadaFunc);  :}
+					;
+
+retorno ::= KEY_RETURN expressao:expressao PONTO_VIRGULA 
+			{: RESULT = new Retorno(expressao);  :}
+			;
+
+chamada_func ::= IDENTIFICADOR:identificador ABRE_PAR lista_exprs:listaExprs FECHA_PAR 
+				{: RESULT = new ChamadaFunc(identificador, listaExprs); :}
+				;
+
+lista_exprs ::= expressao:exp resto_lista_exprs:rlexp
+				{: rlexp.addLast(exp); RESULT = rlexp; :}
+				
+              | /*vazio*/
+              {: RESULT = new LinkedList<Expressao>(); :}
+              ; 
+
+resto_lista_exprs ::= resto_lista_exprs:rlexp VIRGULA expressao:exp
+					{: rlexp.addLast(exp);
+					   RESULT = rlexp; :}
+					
+                    | /*vazio*/
+                    {: RESULT = new LinkedList<Expressao>(); :}
+                    ;
+
+expressao ::= expressao:exp1 SOMA expressao:exp2
+		{: RESULT = new ExprAritmetica(exp1, exp2, "+"); :}
+        
+        | expressao:exp1 SUB expressao:exp2
+        {: RESULT = new ExprAritmetica(exp1, exp2, "-"); :}
+        
+        | expressao:exp1 MULT expressao:exp2
+        {: RESULT = new ExprAritmetica(exp1, exp2, "*"); :}
+        
+        | expressao:exp1 DIV expressao:exp2
+        {: RESULT = new ExprAritmetica(exp1, exp2, "/"); :}
+        
+        | expressao:exp1 RESTO expressao:exp2
+        {: RESULT = new ExprAritmetica(exp1, exp2, "%"); :}
+        
+        | expressao:exp1 AND expressao:exp2
+        {: RESULT = new ExprLogica(exp1, exp2, "and"); :}
+        
+        | expressao:exp1 OR expressao:exp2
+        {: RESULT = new ExprLogica(exp1, exp2, "or"); :}
+        
+        | expressao:exp1 IGUAL_QUE expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, "=="); :}
+        
+        | expressao:exp1 DIFERENTE_QUE expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, "!="); :}
+        
+        | expressao:exp1 MENOR_QUE expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, "<"); :}
+        
+        | expressao:exp1 MENOR_OU_IGUAL expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, "<="); :}
+        
+        | expressao:exp1 MAIOR_OU_IGUAL expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, ">="); :}
+        
+        | expressao:exp1 MAIOR_QUE expressao:exp2
+        {: RESULT = new ExprRelacional(exp1, exp2, ">"); :}
+        
+        | expr_basica:exp
+        {:  RESULT = exp;  :}
+        ;
+
+expr_basica ::= ABRE_PAR expressao:exp FECHA_PAR 
+				{:  RESULT = exp; :}
+
+         | NOT expr_basica:exp
+         {:  RESULT = new ExpUnaria("NOT", exp); :}
+             
+         | SUB expr_basica:exp
+         {:  RESULT = new ExpUnaria("SUB", exp);  :}
+         
+         | INT_LITERAL:lex
+         {:  int valor = Integer.parseInt(lex); 
+             RESULT = new IntLiteral(valor); :}
+         
+         | CHAR_LITERAL:cha
+         {: RESULT = new CharLiteral(cha); :}
+         
+         | FLOAT_LITERAL:flo
+         {: float valor = Float.parseFloat(flo);
+         	RESULT = new FloatLiteral(valor); :}
+         
+         | STRING_LITERAL:lex
+         {: RESULT = new StringLiteral(lex); :}
+         
+         | IDENTIFICADOR:lex
+         {: RESULT = new ExprIdentificador(lex); :}
+         
+         | chamada_func:chaf
+         {: RESULT = chaf; :}
+         ;
+         
+         
